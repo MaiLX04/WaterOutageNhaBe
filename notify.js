@@ -6,17 +6,20 @@ const URL = process.env.URL || "https://capnuocnhabe.vn/wp-json/wp/v2/posts?cate
 const KEYWORDS = process.env.KEYWORDS || "Phước Kiển, Lê Văn Lương";
 const CHECK_WINDOW_HOURS = Number(process.env.CHECK_WINDOW_HOURS) || 24;
 
-// async function checkSite() {
-//     try {
-//         const response = await axios.get(URL);
-//         const text = response.data;
-//         // Simple keyword check
-//         if (text.includes("your_keyword")) {
-//             await sendMessage("New update found!");
-//         }
-//     } catch (err) {
-//         console.error("Error fetching site:", err.message);
-//     }
+function loadSent() {
+    if (fs.existsSync(CACHE_FILE)) {
+        return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+    }
+    return [];
+}
+
+function saveSent(sentIds) {
+    fs.mkdirSync("cache", { recursive: true });
+    // keep only the last 10 IDs
+    const trimmed = sentIds.slice(-10);
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(trimmed));
+}
+
 function cleanTitle(titleText) {
     return titleText
         .replace(/&#8211;/g, "–")
@@ -47,6 +50,7 @@ async function checkSite() {
     console.log(`Keywords list: [${keywordsList.join(", ")}]`);
     console.log(`Check window: last ${CHECK_WINDOW_HOURS} hours`);
     try {
+        const sentIds = loadSent();
         const response = await axios.get(URL);
         const posts = response.data;
         if (!Array.isArray(posts)) {
@@ -56,6 +60,10 @@ async function checkSite() {
         console.log(`Fetched ${posts.length} latest posts.`);
         let matchCount = 0;
         for (const post of posts) {
+            if (sentIds.includes(post.id)) {
+                console.log(`  -> Skipping (already sent): ${post.title.rendered}`);
+                continue;
+            }
             const title = cleanTitle(post.title?.rendered || "");
             const content = post.content?.rendered || "";
             const postDateGmt = post.date_gmt ? new Date(post.date_gmt + "Z") : new Date(post.date);
@@ -84,11 +92,13 @@ async function checkSite() {
 
                 await sendMessage(message);
                 console.log("  -> Telegram notification sent.");
+                sentIds.push(post.id);
                 matchCount++;
             } else {
                 console.log("  -> No keyword match.");
             }
         }
+        saveSent(sentIds);
         console.log(`Finished checking. Sent ${matchCount} notifications.`);
     } catch (err) {
         console.error("Error checking site or sending notifications:", err.message);
