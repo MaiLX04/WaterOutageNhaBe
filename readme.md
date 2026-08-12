@@ -1,1 +1,1 @@
-add to trigger :v
+add readme to trigger action :v
