@@ -11,16 +11,23 @@ const CACHE_FILE = "cache/sent.json";   // define the cache file path
 
 function loadSent() {
     if (fs.existsSync(CACHE_FILE)) {
-        return JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
+        try {
+            const data = fs.readFileSync(CACHE_FILE, "utf8");
+            if (data.trim()) {
+                return JSON.parse(data);
+            }
+        } catch (err) {
+            console.error("Cache file corrupted, resetting:", err.message);
+        }
     }
-    return [];
+    return []; // fallback to empty list
 }
 
 function saveSent(sentIds) {
     fs.mkdirSync("cache", { recursive: true });
     // keep only the last 10 IDs
     const trimmed = sentIds.slice(-10);
-    fs.writeFileSync(CACHE_FILE, JSON.stringify(trimmed));
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(trimmed, null, 2));
 }
 
 function cleanTitle(titleText) {
