@@ -5,7 +5,7 @@ on:
     branches:
       - main        # run on pushes to main
   schedule:
-    - cron: "0 */4 * * *"   # every 4 hours
+     - cron: "*/1 * * * *"
   workflow_dispatch:        # manual trigger
 
 jobs:
