@@ -58,7 +58,7 @@ async function checkSite() {
         const posts = response.data;
         if (!Array.isArray(posts)) {
             console.error("Invalid response format. Expected an array of posts.");
-            return;
+            process.exit(1);
         }
         console.log(`Fetched ${posts.length} latest posts.`);
         let matchCount = 0;
@@ -108,6 +108,7 @@ async function checkSite() {
         if (err.response) {
             console.error("Response data:", err.response.data);
         }
+        process.exit(1);
     }
 }
 checkSite();
