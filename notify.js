@@ -1,10 +1,13 @@
 require('dotenv').config();
 const axios = require("axios");
+const fs = require("fs");
+
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
-const URL = process.env.URL || "https://capnuocnhabe.vn/wp-json/wp/v2/posts?categories=34&per_page=5";
-const KEYWORDS = process.env.KEYWORDS || "Phước Kiển, Lê Văn Lương";
+const URL = process.env.URL;
+const KEYWORDS = process.env.KEYWORDS;
 const CHECK_WINDOW_HOURS = Number(process.env.CHECK_WINDOW_HOURS) || 24;
+const CACHE_FILE = "cache/sent.json";   // define the cache file path
 
 function loadSent() {
     if (fs.existsSync(CACHE_FILE)) {
