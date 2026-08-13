@@ -32,6 +32,7 @@ jobs:
           CHAT_ID: ${{ secrets.CHAT_ID }}
           URL: ${{ secrets.URL }}
           KEYWORDS: ${{ secrets.KEYWORDS }}
+          CHECK_WINDOW_HOURS: ${{ vars.CHECK_WINDOW_HOURS }}
 
       - name: Commit updated sent.json
         run: |
