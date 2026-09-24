@@ -1,7 +1,6 @@
 require('dotenv').config();
 const axios = require("axios");
 const fs = require("fs");
-const { SocksProxyAgent } = require("socks-proxy-agent");
 // Bypass SSL verification — capnuocnhabe.vn has an incomplete certificate chain
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -66,6 +65,7 @@ async function checkSite() {
         let axiosConfig = { timeout: 30000 };
         if (PROXY_URL) {
             console.log(`Using SOCKS proxy: ${PROXY_URL}`);
+            const { SocksProxyAgent } = await import("socks-proxy-agent");
             const agent = new SocksProxyAgent(PROXY_URL);
             axiosConfig.httpsAgent = agent;
             axiosConfig.httpAgent = agent;
