@@ -2,6 +2,9 @@ require('dotenv').config();
 const axios = require("axios");
 const fs = require("fs");
 
+// Bypass SSL verification — capnuocnhabe.vn has an incomplete certificate chain
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
 const URL = process.env.URL;
@@ -30,14 +33,11 @@ function saveSent(sentIds) {
     fs.writeFileSync(CACHE_FILE, JSON.stringify(trimmed, null, 2));
 }
 
-function cleanTitle(titleText) {
-    return titleText
-        .replace(/&#8211;/g, "–")
-        .replace(/&amp;/g, "&")
-        .replace(/&lt;/g, "<")
-        .replace(/&gt;/g, ">")
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'");
+function stripHtml(html) {
+    return html
+        .replace(/<[^>]*>/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 async function sendMessage(msg) {
     const apiUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
@@ -62,26 +62,26 @@ async function checkSite() {
     try {
         const sentIds = loadSent();
         const response = await axios.get(URL);
-        const posts = response.data;
+        const posts = response.data?.items;
         if (!Array.isArray(posts)) {
-            console.error("Invalid response format. Expected an array of posts.");
+            console.error("Invalid response format. Expected { items: [...] }.");
             process.exit(1);
         }
         console.log(`Fetched ${posts.length} latest posts.`);
         let matchCount = 0;
         for (const post of posts) {
-            if (sentIds.includes(post.id)) {
-                console.log(`  -> Skipping (already sent): ${post.title.rendered}`);
+            if (sentIds.includes(post.IdBaiViet)) {
+                console.log(`  -> Skipping (already sent): ${post.TieuDe}`);
                 continue;
             }
-            const title = cleanTitle(post.title?.rendered || "");
-            const content = post.content?.rendered || "";
-            const postDateGmt = post.date_gmt ? new Date(post.date_gmt + "Z") : new Date(post.date);
+            const title = post.TieuDe || "";
+            const content = stripHtml(post.NoiDung || "");
+            const postDate = new Date(post.NgayDang);
             const now = new Date();
 
             // Calculate post age in hours
-            const ageInHours = (now - postDateGmt) / (1000 * 60 * 60);
-            console.log(`- Post: "${title}" | Published: ${post.date} | Age: ${ageInHours.toFixed(2)} hours`);
+            const ageInHours = (now - postDate) / (1000 * 60 * 60);
+            console.log(`- Post: "${title}" | Published: ${post.NgayDang} | Age: ${ageInHours.toFixed(2)} hours`);
             if (ageInHours > CHECK_WINDOW_HOURS) {
                 console.log("  -> Skipped (outside time window)");
                 continue;
@@ -94,15 +94,20 @@ async function checkSite() {
             if (matchedKeywords.length > 0) {
                 console.log(`  -> Match found! Keywords: ${matchedKeywords.join(", ")}`);
 
+                // Build detail link: prefer PDF attachment, fallback to main page
+                const detailUrl = post.Files?.[0]
+                    ? `https://capnuocnhabe.vn${post.Files[0].DuongDan}`
+                    : 'https://capnuocnhabe.vn/KhachHang/ThongBaoCupNuoc';
+
                 const message = `🔔 <b>PHÁT HIỆN THÔNG BÁO CÚP NƯỚC!</b>\n\n` +
                     `📌 <b>Tiêu đề:</b> ${title}\n` +
-                    `⏰ <b>Thời gian đăng:</b> ${new Date(post.date).toLocaleString('vi-VN')}\n` +
+                    `⏰ <b>Thời gian đăng:</b> ${postDate.toLocaleString('vi-VN')}\n` +
                     `🔑 <b>Từ khóa khớp:</b> ${matchedKeywords.join(", ")}\n\n` +
-                    `🔗 <b>Xem chi tiết tại:</b> <a href="${post.link}">Website Cấp nước Nhà Bè</a>`;
+                    `🔗 <b>Xem chi tiết tại:</b> <a href="${detailUrl}">Website Cấp nước Nhà Bè</a>`;
 
                 await sendMessage(message);
                 console.log("  -> Telegram notification sent.");
-                sentIds.push(post.id);
+                sentIds.push(post.IdBaiViet);
                 matchCount++;
             } else {
                 console.log("  -> No keyword match.");

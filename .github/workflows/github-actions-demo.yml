@@ -38,6 +38,7 @@ jobs:
           URL: ${{ secrets.URL }}
           KEYWORDS: ${{ secrets.KEYWORDS }}
           CHECK_WINDOW_HOURS: ${{ vars.CHECK_WINDOW_HOURS }}
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
 
       - name: Commit updated sent.json
         run: |
