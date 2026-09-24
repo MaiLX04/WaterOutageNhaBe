@@ -61,7 +61,7 @@ async function checkSite() {
     console.log(`Check window: last ${CHECK_WINDOW_HOURS} hours`);
     try {
         const sentIds = loadSent();
-        const response = await axios.get(URL);
+        const response = await axios.get(URL, { timeout: 30000 });
         const posts = response.data?.items;
         if (!Array.isArray(posts)) {
             console.error("Invalid response format. Expected { items: [...] }.");
