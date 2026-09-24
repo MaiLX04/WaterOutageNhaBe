@@ -10,7 +10,7 @@ const CHAT_ID = process.env.CHAT_ID;
 const URL = process.env.URL;
 const KEYWORDS = process.env.KEYWORDS;
 const CHECK_WINDOW_HOURS = Number(process.env.CHECK_WINDOW_HOURS);
-const PROXY_URL = process.env.PROXY_URL;
+const PROXY_URLS = process.env.PROXY_URLS;
 const CACHE_FILE = "cache/sent.json";   // define the cache file path
 
 function loadSent() {
@@ -49,6 +49,74 @@ async function sendMessage(msg) {
         disable_web_page_preview: false
     });
 }
+
+async function getWithProxyRetry(url, maxAttempts = 5) {
+    const proxies = (PROXY_URLS || "")
+        .split(",")
+        .map(p => p.trim())
+        .filter(Boolean);
+
+    if (proxies.length === 0) {
+        console.log("No proxy configured. Sending direct request.");
+        return await axios.get(url, { timeout: 30000 });
+    }
+
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        // Rotate through proxies
+        const proxyUrl = proxies[(attempt - 1) % proxies.length];
+
+        try {
+            console.log(
+                `Request attempt ${attempt}/${maxAttempts} using proxy: ${proxyUrl}`
+            );
+
+            const axiosConfig = {
+                timeout: 30000
+            };
+
+            if (proxyUrl.startsWith("socks")) {
+                const { SocksProxyAgent } =
+                    await import("socks-proxy-agent");
+
+                const agent = new SocksProxyAgent(proxyUrl);
+
+                axiosConfig.httpsAgent = agent;
+                axiosConfig.httpAgent = agent;
+            } else if (proxyUrl.startsWith("http")) {
+                const { HttpsProxyAgent } =
+                    await import("https-proxy-agent");
+
+                const agent = new HttpsProxyAgent(proxyUrl);
+
+                axiosConfig.httpsAgent = agent;
+                axiosConfig.httpAgent = agent;
+            }
+
+            const response = await axios.get(url, axiosConfig);
+
+            console.log(`Request succeeded using proxy: ${proxyUrl}`);
+
+            return response;
+
+        } catch (err) {
+            lastError = err;
+
+            console.error(
+                `Attempt ${attempt} failed using ${proxyUrl}:`,
+                err.code || err.message
+            );
+
+            if (attempt < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
+    }
+
+    throw lastError;
+}
+
 async function checkSite() {
     if (!BOT_TOKEN || !CHAT_ID) {
         console.error("Error: BOT_TOKEN or CHAT_ID is not configured in environment variables.");
@@ -62,24 +130,8 @@ async function checkSite() {
     console.log(`Check window: last ${CHECK_WINDOW_HOURS} hours`);
     try {
         const sentIds = loadSent();
-
-        let axiosConfig = { timeout: 30000 };
-        if (PROXY_URL) {
-            console.log(`Using proxy: ${PROXY_URL}`);
-            if (PROXY_URL.startsWith('socks')) {
-                const { SocksProxyAgent } = await import("socks-proxy-agent");
-                const agent = new SocksProxyAgent(PROXY_URL);
-                axiosConfig.httpsAgent = agent;
-                axiosConfig.httpAgent = agent;
-            } else if (PROXY_URL.startsWith('http')) {
-                const { HttpsProxyAgent } = await import("https-proxy-agent");
-                const agent = new HttpsProxyAgent(PROXY_URL);
-                axiosConfig.httpsAgent = agent;
-                axiosConfig.httpAgent = agent;
-            }
-        }
-
-        const response = await axios.get(URL, axiosConfig);
+        // const response = await axios.get(URL, axiosConfig);
+        const response = await getWithProxyRetry(URL, 5);
         const posts = response.data?.items;
         if (!Array.isArray(posts)) {
             console.error("Invalid response format. Expected { items: [...] }.");
@@ -137,9 +189,13 @@ async function checkSite() {
         console.error("Error checking site or sending notifications:", err.message);
         if (err.response) {
             console.error("Response data:", err.response.data);
-        } else if (PROXY_URL && (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET' || err.message.includes('timeout'))) {
+        } else if (PROXY_URLS && (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET' || err.message.includes('timeout'))) {
             console.log("Proxy/Network error detected. Sending Telegram alert...");
-            const alertMsg = `⚠️ <b>LỖI PROXY!</b>\n\nKhông thể kết nối đến web Cấp nước Nhà Bè. Proxy hiện tại (<code>${PROXY_URL}</code>) có thể đã chết (Timeout/Connection Refused).\n\nVui lòng tìm SOCKS5 Proxy Việt Nam mới và cập nhật Github Secret <b>PROXY_URL</b>.`;
+            const alertMsg = `⚠️ <b>LỖI PROXY!</b>\n\n` +
+                `Không thể kết nối đến web Cấp nước Nhà Bè. ` +
+                `Proxy hiện tại (<code>${PROXY_URLS}</code>) có thể đã chết ` +
+                `(Timeout/Connection Refused/Reset).\n\n` +
+                `Vui lòng cập nhật <b>PROXY_URLS</b> trong GitHub Secret.`;
             try {
                 await sendMessage(alertMsg);
             } catch (alertErr) {
