@@ -1,6 +1,7 @@
 require('dotenv').config();
 const axios = require("axios");
 const fs = require("fs");
+
 // Bypass SSL verification — capnuocnhabe.vn has an incomplete certificate chain
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -61,14 +62,21 @@ async function checkSite() {
     console.log(`Check window: last ${CHECK_WINDOW_HOURS} hours`);
     try {
         const sentIds = loadSent();
-        
+
         let axiosConfig = { timeout: 30000 };
         if (PROXY_URL) {
-            console.log(`Using SOCKS proxy: ${PROXY_URL}`);
-            const { SocksProxyAgent } = await import("socks-proxy-agent");
-            const agent = new SocksProxyAgent(PROXY_URL);
-            axiosConfig.httpsAgent = agent;
-            axiosConfig.httpAgent = agent;
+            console.log(`Using proxy: ${PROXY_URL}`);
+            if (PROXY_URL.startsWith('socks')) {
+                const { SocksProxyAgent } = await import("socks-proxy-agent");
+                const agent = new SocksProxyAgent(PROXY_URL);
+                axiosConfig.httpsAgent = agent;
+                axiosConfig.httpAgent = agent;
+            } else if (PROXY_URL.startsWith('http')) {
+                const { HttpsProxyAgent } = await import("https-proxy-agent");
+                const agent = new HttpsProxyAgent(PROXY_URL);
+                axiosConfig.httpsAgent = agent;
+                axiosConfig.httpAgent = agent;
+            }
         }
 
         const response = await axios.get(URL, axiosConfig);
