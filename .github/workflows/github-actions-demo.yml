@@ -36,6 +36,7 @@ jobs:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
           URL: ${{ secrets.URL }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
           KEYWORDS: ${{ secrets.KEYWORDS }}
           CHECK_WINDOW_HOURS: ${{ vars.CHECK_WINDOW_HOURS }}
           NODE_TLS_REJECT_UNAUTHORIZED: '0'

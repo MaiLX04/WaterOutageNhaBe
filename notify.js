@@ -1,7 +1,7 @@
 require('dotenv').config();
 const axios = require("axios");
 const fs = require("fs");
-
+const { SocksProxyAgent } = require("socks-proxy-agent");
 // Bypass SSL verification — capnuocnhabe.vn has an incomplete certificate chain
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
@@ -10,6 +10,7 @@ const CHAT_ID = process.env.CHAT_ID;
 const URL = process.env.URL;
 const KEYWORDS = process.env.KEYWORDS;
 const CHECK_WINDOW_HOURS = Number(process.env.CHECK_WINDOW_HOURS);
+const PROXY_URL = process.env.PROXY_URL;
 const CACHE_FILE = "cache/sent.json";   // define the cache file path
 
 function loadSent() {
@@ -61,7 +62,16 @@ async function checkSite() {
     console.log(`Check window: last ${CHECK_WINDOW_HOURS} hours`);
     try {
         const sentIds = loadSent();
-        const response = await axios.get(URL, { timeout: 30000 });
+        
+        let axiosConfig = { timeout: 30000 };
+        if (PROXY_URL) {
+            console.log(`Using SOCKS proxy: ${PROXY_URL}`);
+            const agent = new SocksProxyAgent(PROXY_URL);
+            axiosConfig.httpsAgent = agent;
+            axiosConfig.httpAgent = agent;
+        }
+
+        const response = await axios.get(URL, axiosConfig);
         const posts = response.data?.items;
         if (!Array.isArray(posts)) {
             console.error("Invalid response format. Expected { items: [...] }.");
@@ -119,6 +129,14 @@ async function checkSite() {
         console.error("Error checking site or sending notifications:", err.message);
         if (err.response) {
             console.error("Response data:", err.response.data);
+        } else if (PROXY_URL && (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET' || err.message.includes('timeout'))) {
+            console.log("Proxy/Network error detected. Sending Telegram alert...");
+            const alertMsg = `⚠️ <b>LỖI PROXY!</b>\n\nKhông thể kết nối đến web Cấp nước Nhà Bè. Proxy hiện tại (<code>${PROXY_URL}</code>) có thể đã chết (Timeout/Connection Refused).\n\nVui lòng tìm SOCKS5 Proxy Việt Nam mới và cập nhật Github Secret <b>PROXY_URL</b>.`;
+            try {
+                await sendMessage(alertMsg);
+            } catch (alertErr) {
+                console.error("Failed to send proxy alert:", alertErr.message);
+            }
         }
         process.exit(1);
     }
